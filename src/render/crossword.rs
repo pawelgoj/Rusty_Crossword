@@ -2,31 +2,146 @@ use std::collections::HashSet;
 
 use crate::{sqllite_conection::Question, COLUMS, ROWS};
 
+use super::frame::Frame;
+
+
+#[derive(Debug)]
+#[derive(Clone)]
 pub enum Orientation {
-    horizontally,
-    perpendicularly
+    Horizontally,
+    Perpendicularly
 }
 
+
+#[derive(Debug)]
+#[derive(Clone)]
 pub struct CrosswordKeyword { 
     question: Question,
     coord_start_x: u8,
     coord_start_y: u8,
     len_of_keyword: u8,
-    orientation: Orientation
+    orientation: Orientation,
+    user_input: Option<String>
 }
 
+#[derive(Debug)]
 pub struct Crossword {
-    crossword_keywords: Vec<CrosswordKeyword>,
+    pub crossword_keywords: Vec<CrosswordKeyword>,
+    response_to_user: Option<String>,
+    instructions_to_user: Option<String>
 }
 
 impl Crossword {
+    fn arrange_indexes_in_order(crossword_keywords: Vec<CrosswordKeyword>) -> Vec<CrosswordKeyword> {
+        let mut i: u8 = 0;
+        let mut arranged = Vec::new();
+        for mut keyword in crossword_keywords {
+            i += 1;
+            keyword.question.id = i as u64;
+            arranged.push(keyword);
+        }
+        arranged
+    }
+
+    fn check_is_in_frame(x_min: i8, x_max: i8, y_min: i8, y_max: i8) -> bool {
+        // Check is in frame, frame range COLUMS or ROWS 0..=VALUE. 
+        if x_min  < 4 || y_min < 4 || x_max > (COLUMS - 3) as i8 || y_max > (ROWS -20) as i8 {
+            return false; 
+        } else {
+            return true;
+        }
+    }
+
+    fn find_position_of_keyword_by_intersect(mut question: CrosswordKeyword, question_in_crossword: &CrosswordKeyword, 
+        questions_taken: &Vec<CrosswordKeyword>) -> Option<CrosswordKeyword> {
+        //if questions have not intersect return None 
+
+        let crossword_string = question.question.answer.clone();
+        let crossword_string_2 = question_in_crossword.question.answer.clone();
+
+        let mut i_in_crossword = 0;
+        let mut index = None;
+        for ch in crossword_string_2.chars() {
+            index = crossword_string.find(ch);
+            match index {
+                Some(index) => { 
+                    match question_in_crossword.orientation {
+                        Orientation::Horizontally => {
+                            question.orientation = Orientation::Perpendicularly;
+                            let x_min = question_in_crossword.coord_start_x as i8 + i_in_crossword as i8;
+                            let y_min = question_in_crossword.coord_start_y as i8 - index as i8;
+                            let x_max = x_min;
+                            let y_max = y_min + question.len_of_keyword as i8 -1;
+
+                            if Crossword::check_is_in_frame(x_min, x_max, y_min, y_max) {
+                                question.orientation = Orientation::Perpendicularly;
+                                question.coord_start_x = x_min as u8;
+                                question.coord_start_y = y_min as u8;
+
+                                let mut collision = false; 
+                                for question_taken in questions_taken {
+                                    collision = Crossword::check_collision(&question, &question_taken);
+                                }
+                                if collision {
+                                    continue;
+                                } else {
+                                    return Some(question);
+                                }
+                            } else {
+                                continue;
+                            }
+                        },
+                        Orientation::Perpendicularly => {
+                            question.orientation = Orientation::Horizontally;
+                            let x_min = question_in_crossword.coord_start_x as i8 - index as i8;
+                            let y_min = question_in_crossword.coord_start_y as i8 + i_in_crossword as i8;
+                            let x_max = x_min + question.len_of_keyword as i8 -1;
+                            let y_max = y_min;
+
+                            if Crossword::check_is_in_frame(x_min, x_max, y_min, y_max) {
+                                question.orientation = Orientation::Horizontally;
+                                question.coord_start_x = x_min as u8;
+                                question.coord_start_y = y_min as u8;
+
+                                let mut collision = false; 
+                                for question_taken in questions_taken {
+                                    collision = Crossword::check_collision(&question, &question_taken);
+                                }
+                                if collision {
+                                    continue;
+                                } else {
+                                    return Some(question);
+                                }
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+                },
+                None => {}
+            }
+            i_in_crossword+=1;
+        };
+        return None;
+
+    }
+
     fn check_char_is_the_same(inserted: &CrosswordKeyword, in_crossword: &CrosswordKeyword,
         position_of_char_ins: u8, position_of_char_in_cross: u8) -> bool {
 
         let char_inserted = inserted.question.answer
-            .chars().nth(position_of_char_ins.into()).unwrap();
+            .chars().nth(position_of_char_ins.into());
+        match char_inserted {
+            Some(_char_inserted) => {},
+            None => {return false}
+        }
+
         let char_in_crossword = in_crossword.question.answer
-            .chars().nth(position_of_char_in_cross.into()).unwrap();
+            .chars().nth(position_of_char_in_cross.into());
+        match char_in_crossword {
+            Some(_char_in_crossword) => {},
+            None => {return false}
+        }
 
         if char_inserted == char_in_crossword {
             return true;
@@ -35,12 +150,12 @@ impl Crossword {
         }
     }
 
-    fn check_collision(inserted: CrosswordKeyword, in_crossword: CrosswordKeyword ) -> bool {
+    fn check_collision(inserted: &CrosswordKeyword, in_crossword: &CrosswordKeyword ) -> bool {
 
         match inserted.orientation  {
-            Orientation::horizontally => {
+            Orientation::Horizontally => {
                 match in_crossword.orientation {
-                    Orientation::horizontally => {
+                    Orientation::Horizontally => {
                         if inserted.coord_start_y == in_crossword.coord_start_y 
                         && (in_crossword.coord_start_x + in_crossword.len_of_keyword >= inserted.coord_start_x)
                         && (in_crossword.coord_start_x -1 <= inserted.coord_start_x)
@@ -50,7 +165,7 @@ impl Crossword {
                             return false;
                         }
                     },
-                    Orientation::perpendicularly => {
+                    Orientation::Perpendicularly => {
                         if (in_crossword.coord_start_x < inserted.coord_start_x - 1 
                             || in_crossword.coord_start_x > inserted.coord_start_x + 1) 
                             && (in_crossword.coord_start_y < inserted.coord_start_y -1 
@@ -61,9 +176,10 @@ impl Crossword {
                             && (in_crossword.coord_start_y <= inserted.coord_start_y 
                             && in_crossword.coord_start_y >= inserted.coord_start_y) {
                                 
-                                let position_of_char_in_cross = in_crossword.coord_start_x 
-                                    - inserted.coord_start_x;
-                                let position_of_char_ins = inserted.coord_start_y - in_crossword.coord_start_y;
+                                let position_of_char_in_cross = (in_crossword.coord_start_x as i8
+                                    - inserted.coord_start_x as i8).abs() as u8;
+                                let position_of_char_ins = (inserted.coord_start_y as i8 
+                                    - in_crossword.coord_start_y as i8).abs() as u8;
                                 let the_same_char = Crossword::check_char_is_the_same(&inserted, 
                                     &in_crossword, position_of_char_ins, position_of_char_in_cross);
 
@@ -78,18 +194,19 @@ impl Crossword {
                     }
                 }
             },
-            Orientation::perpendicularly => {
+            Orientation::Perpendicularly => {
                 match in_crossword.orientation {
-                    Orientation::horizontally => { 
+                    Orientation::Horizontally => { 
                         let in_crossword_x_max = in_crossword.coord_start_x + in_crossword.len_of_keyword;
                         let inserted_y_max = inserted.coord_start_y + inserted.len_of_keyword;
                         if (in_crossword.coord_start_x - 1 <= inserted.coord_start_x)
                             && (in_crossword_x_max + 1 >= inserted.coord_start_x)
                             && (in_crossword.coord_start_y >= inserted.coord_start_y -1)
                             && (in_crossword.coord_start_y <= inserted_y_max +1) {
-                                let position_of_char_in_cross = inserted.coord_start_x 
-                                    - in_crossword.coord_start_x;
-                                let position_of_char_ins = in_crossword.coord_start_y - inserted.coord_start_y;
+                                let position_of_char_in_cross = (inserted.coord_start_x as i8 
+                                    - in_crossword.coord_start_x as i8).abs() as u8;
+                                let position_of_char_ins = (in_crossword.coord_start_y as i8 
+                                    - inserted.coord_start_y as i8).abs() as u8;
                                 let the_same_char = Crossword::check_char_is_the_same(&inserted, 
                                     &in_crossword, position_of_char_ins, position_of_char_in_cross);
                                 if the_same_char {
@@ -101,7 +218,7 @@ impl Crossword {
                                 return false;
                             }
                     },
-                    Orientation::perpendicularly => {
+                    Orientation::Perpendicularly => {
                         let in_crossword_y_max = in_crossword.coord_start_y 
                             + in_crossword.len_of_keyword;
                         if inserted.coord_start_x == in_crossword.coord_start_x 
@@ -118,53 +235,234 @@ impl Crossword {
     }
     
     //return coord_start_x and coord_start_y
-    fn determine_position(question: &String, colums: u8, rows: u8,  first: bool, 
-        questions_taken: &Vec<CrosswordKeyword>) -> Result<(u8, u8), String> {
-            let question_len = question.len();
+    fn determine_position(mut question: CrosswordKeyword, first: bool, 
+        questions_taken: &Vec<CrosswordKeyword>) -> Option<CrosswordKeyword> {
+        let colums= COLUMS;
+        let rows = ROWS;
+            
+        let question_len = question.question.answer.len();
+
+        if question_len > (colums as usize) - 2 {
+            panic!("The keyword to long to crrosword in x direction")
+        } else if question_len > (rows as usize) - 2  {
+            panic!("The keyword to long to crrosword in y direction")
+        } else {
             if first {
-                if question_len > (colums as usize) - 2 {
-                    panic!("The keyword to long to crrosword in x direction")
-                } else if question_len > (rows as usize) - 2  {
-                    panic!("The keyword to long to crrosword in y direction")
-                } else {
-                    return Ok((2,2));
-                }
+                question.coord_start_x = 5;
+                question.coord_start_y = 5;
+                return Some(question);
             } else {
-                
-
-
-                return Err("Not implement yet!!!!!".to_string());
+                for question_in_crossword in questions_taken {
+                    let question_tym = Crossword::find_position_of_keyword_by_intersect(
+                        question.clone(), &question_in_crossword, &questions_taken);
+                    match question_tym {
+                        None => {continue}, 
+                        Some(question_tym) => {
+                            return Some(question_tym);
+                        }
+                    }
+                }
+                return None;
             }
+        }
+    }
+
+    pub fn check_keyword_is_in_crossword(&self, id: usize) -> bool {
+        for keyword in &self.crossword_keywords {
+            if keyword.question.id as usize == id {
+                return true;
+            }
+        }
+        return false 
     }
 
     pub fn new(questions: Vec<Question>) -> Self {
-        let mut crossword_keywords:Vec<CrosswordKeyword> = Vec::new();
+        let mut questions_taken:Vec<CrosswordKeyword> = Vec::new();
+        let mut first = true;
 
         for question in questions {
-        
-            let x_y = Crossword::determine_position(&question.answer, 
-                COLUMS as u8, ROWS as u8, true, &crossword_keywords);
 
-                let crossword_keyword = CrosswordKeyword{
-                    len_of_keyword: question.answer.len() as u8,
-                    question: question,
-                    coord_start_x: 1, 
-                    coord_start_y: 1,
-                    orientation: Orientation::horizontally,
-                };
-                crossword_keywords.push(crossword_keyword);
+            let crossword_keyword = CrosswordKeyword{
+                len_of_keyword: question.answer.len() as u8,
+                question: question,
+                coord_start_x: 1, 
+                coord_start_y: 1,
+                orientation: Orientation::Horizontally,
+                user_input: None
+            };
+
+            let crossword_keyword = Crossword::determine_position(crossword_keyword, 
+                first, &questions_taken);
+
+            match crossword_keyword {
+                None => {},
+                Some(crossword_keyword) => {questions_taken.push(crossword_keyword);}
+            }
+            first = false;
         }
-        Self { crossword_keywords: crossword_keywords }
+        let questions_taken = Crossword::arrange_indexes_in_order(questions_taken);
+
+        Self { crossword_keywords: questions_taken, response_to_user: None, instructions_to_user: None }
+    }
+
+    pub fn response_to_user(&mut self, message: String) {
+        self.response_to_user = Some(message);
+    }
+
+    pub fn add_user_input(&mut self, char: char, question_id: usize) {
+        for keyword in &mut self.crossword_keywords {
+            if keyword.question.id == question_id as u64 {
+                match keyword.user_input {
+                    Some(ref mut input) => {input.push_str(&char.to_string());},
+                    None => {keyword.user_input = Some(char.to_string());}
+                }
+            }
+        }
+    }
+
+    pub fn clear_user_input(&mut self, question_id: usize) {
+        for keyword in &mut self.crossword_keywords {
+            if keyword.question.id == question_id as u64 {
+                keyword.user_input = None;
+                break;
+            }
+        }
+    }
+
+    pub fn set_instructions_to_user(&self, instructions: String) {
+        //TODO
+    }
+
+    pub fn show_guessed_keyword() {
+        //TODO
     }
 
 }
 
+impl Crossword {
+    //TODO 
+    //Draw must draw instructions for user.
+    pub fn draw(&self, frame: &mut super::frame::Frame, strings_start: u8) {
+        let char = "\x1b[1;30;47m#\x1b[#C\x1b[1;37;40m   ";
+        let crossword_keywords = &self.crossword_keywords;
+        let mut questions_out = String::new();
+
+        let mut positions_with_leters: HashSet<(u8, u8)> = HashSet::new();
+
+        for key_word in crossword_keywords { 
+            let col = key_word.coord_start_x;
+            let row = key_word.coord_start_y;
+            let mut user_input = String::new();
+            if key_word.user_input == None {
+
+            } else {
+                user_input = key_word.user_input.clone().unwrap();
+            }
+            for i in 0..key_word.len_of_keyword {
+                insert_char_in_crossword(&mut positions_with_leters, 
+                    &key_word.orientation, i, col, row, frame, key_word, char, &user_input);
+ 
+            }
+            questions_out.push_str(&key_word.question.id.to_string());
+            questions_out.push('.');
+            questions_out.push(' ');
+            questions_out.push_str(&key_word.question.question);
+            questions_out.push_str(&"\n");
+        }
+        match &self.response_to_user {
+            Some(ref response ) => {questions_out.push_str(&response);
+                questions_out.push_str(&"\n");},
+            None => {}
+        }
+        
+        //instructions:
+        let mut output = String::new();
+        let instructions = "\x1b[1;37;40mpress 'q' to quit game \n \n";
+        output.push_str(&instructions);
+        output.push_str(&questions_out);
+        frame[0][strings_start as usize] = output;
+
+        fn insert_char_in_crossword (positions_with_leters: &mut HashSet<(u8, u8)>, orientation: &Orientation, i: u8, 
+            mut col: u8, mut row: u8, frame: &mut Frame, key_word: &CrosswordKeyword, char: &str, user_input: &String) {
+            
+            let col_id;
+            let col_arrow;
+            let row_id;
+            let row_arrow;
+            let arrow;
+
+            match orientation {
+                Orientation::Horizontally => {
+                    col_id = col -2;
+                    col_arrow = col -1;
+                    row_id = row;
+                    row_arrow = row;
+                    col = col + i;
+                    arrow = "\x1b[1;36;40m>";
+                },
+
+                Orientation::Perpendicularly => {
+                    col_id = col;
+                    col_arrow = col;
+                    row_id = row -2;
+                    row_arrow = row -1;
+                    row = row + i;
+                    arrow = "\x1b[1;36;40mv";
+                }
+            }
+            
+            if i == 0 {
+                let mut out = "\x1b[1;31;40m".to_string();
+                out.push_str(&key_word.question.id.to_string());
+                frame[(col_id) as usize][row_id as usize] = out;
+                frame[(col_arrow) as usize][row_arrow as usize] = arrow.to_string();
+            } 
+            if key_word.user_input == None && !positions_with_leters.contains(&((col) as u8, row as u8)) {
+                frame[(col) as usize][(row) as usize] = char.to_string();
+            } else {
+                if !positions_with_leters.contains(&((col) as u8, row as u8)) {
+                    if i < user_input.len() as u8 {
+                        frame[(col) as usize][(row) as usize] = user_input.chars()
+                            .nth(i.into()).unwrap().to_string();
+                        positions_with_leters.insert(((col) as u8, row as u8));
+
+                    } else {
+
+                        frame[(col) as usize][(row) as usize] = char.to_string();
+
+                    }
+                }
+            }
+        }
+    }
+
+}
+
+
+
+
+
+
+
+/*
+Unit tests 
+-------------------------------------------------------------------------------------------------
+ */
 #[cfg(test)]
-mod Test_of_crossword {
-    use std::collections::HashSet;
-    use crate::sqllite_conection::Question;
+mod test_of_crossword {
+    use crate::sqllite_conection::{Question, Questions};
 
     use super::{Crossword, CrosswordKeyword, Orientation};
+
+    struct PreConditions { 
+        path: String,
+    }
+
+    impl PreConditions {
+        pub fn new() -> Self {
+            Self {path: String::from("Password.db")}
+        }
+    }
 
     fn test_mocks(start_point_insert: (u8, u8), orientation_insert: Orientation,
         start_point_in_cross: (u8, u8), orientation_in_crossword: Orientation) -> 
@@ -187,7 +485,8 @@ mod Test_of_crossword {
             coord_start_x: start_point_insert.0,
             coord_start_y: start_point_insert.1,
             len_of_keyword: 5,
-            orientation: orientation_insert
+            orientation: orientation_insert,
+            user_input: None
         };
 
         let crrossword_key_in_crossword = CrosswordKeyword{
@@ -195,93 +494,208 @@ mod Test_of_crossword {
             coord_start_x: start_point_in_cross.0,
             coord_start_y: start_point_in_cross.1,
             len_of_keyword: 4,
-            orientation: orientation_in_crossword
+            orientation: orientation_in_crossword,
+            user_input: None
         };
 
         (crrossword_key_insert, crrossword_key_in_crossword)
 
     }
+
+    #[test] 
+    fn test_check_is_in_frame() {
+        let result = Crossword::check_is_in_frame(1, 5, 4, 9);
+        assert!(result);
+
+        let result = Crossword::check_is_in_frame(-1, 5, 4, 9);
+        assert!(!result);
+    }
+
+    #[test]
+    fn test_new_crossword() {
+        //Given 
+        let pre_conditions = PreConditions::new();
+        let path_to_db = pre_conditions.path.as_str();
+        let mut questions = Questions::new();
+        //When 
+        questions.load_questions_from_db(path_to_db);
+        questions.load_questions_from_db(path_to_db);
+        questions.draw_questions_order();
+        //Then
+        let vec_questions = questions.return_questions(7);
+        assert_eq!(vec_questions.len(), 7);
+        let crossword = Crossword::new(vec_questions);
+
+        println!("{:?}", crossword.crossword_keywords);
+        println!("keywords: {:?}", crossword.crossword_keywords.len());
+        assert!(true);
+
+    }
+
+    #[test]
+    fn test_find_position_of_keyword_by_intersect() {
+        //Given no other position taken, positive test case 
+        let positions_taken:Vec<CrosswordKeyword> = Vec::new();
+        let mocks = test_mocks((2,2), 
+            Orientation::Horizontally, (1,1), 
+            Orientation::Horizontally);
+
+        //When
+        let result = Crossword::find_position_of_keyword_by_intersect(
+            mocks.1, &mocks.0, &positions_taken);
+        let result = result.unwrap();
+
+        //Then
+        let mut result_orientation = false;
+
+        match result.orientation {
+            Orientation::Perpendicularly => {result_orientation = true},
+            Orientation::Horizontally => {result_orientation = false}
+        };
+
+        assert!(result_orientation);
+        assert_eq!(result.coord_start_x, 3);
+        assert_eq!(result.coord_start_y, 2);
+
+        //Given no other position taken, positive test case 
+        let positions_taken:Vec<CrosswordKeyword> = Vec::new();
+        let mocks = test_mocks((2,2), 
+            Orientation::Perpendicularly, (1,1), 
+            Orientation::Perpendicularly);
+
+        //When
+        let result = Crossword::find_position_of_keyword_by_intersect(
+            mocks.1, &mocks.0, &positions_taken);
+        let result = result.unwrap();
+
+        //Then
+        let mut result_orientation = false;
+
+        match result.orientation {
+            Orientation::Horizontally => {result_orientation = true},
+            Orientation::Perpendicularly => {result_orientation = false}
+        };
+
+        assert!(result_orientation);
+        assert_eq!(result.coord_start_x, 2);
+        assert_eq!(result.coord_start_y, 3);
+
+
+        //Given, Negative test case, expected to return None 
+        let question_to_negative_test_case = Question{
+            id: 1, 
+            question: "Test question?".to_string(),
+            answer: "XXXXXX".to_string()
+        };
+
+        let crrossword_key_insert = CrosswordKeyword{
+            question: question_to_negative_test_case,
+            coord_start_x: 1,
+            coord_start_y: 1,
+            len_of_keyword: 5,
+            orientation: Orientation::Horizontally,
+            user_input: None
+        };
+
+        let positions_taken:Vec<CrosswordKeyword> = Vec::new();
+        let mocks = test_mocks((2,2), 
+            Orientation::Horizontally, (1,1), 
+            Orientation::Horizontally);
+
+        //When
+        let result = Crossword::find_position_of_keyword_by_intersect(
+            mocks.1, &crrossword_key_insert, &positions_taken);
+
+        //Then
+        let result = match result {
+            Some(_result) => false,
+            None => true
+            
+        };
+        assert!(result);
+    }
+    
     #[test] 
     fn test_determine_position_first_position() {
         //Given 
         let tuple_keywords = test_mocks((1, 2), 
-            Orientation::horizontally, (1,2), 
-            Orientation::horizontally);
-        let question = tuple_keywords.0.question.question;
-        let mut positions_taken:Vec<CrosswordKeyword> = Vec::new();
+            Orientation::Horizontally, (1,2), 
+            Orientation::Horizontally);
+        let positions_taken:Vec<CrosswordKeyword> = Vec::new();
 
         //When 
-        let position = Crossword::determine_position(&question, 
-            20, 20,true, &positions_taken);
-
+        let position = Crossword::determine_position(tuple_keywords.1, 
+            true, &positions_taken);
+        let result = position.unwrap();
         //Then 
-        assert_eq!(position.unwrap(), (1 as u8, 1 as u8));
+        assert_eq!(result.coord_start_x, 2);
+        assert_eq!(result.coord_start_y, 2);
     }
 
     #[test]
     fn test_check_collision_no_collision() {
         //Given, horizontally, no collision
         let tuple_keywords = test_mocks((1, 2), 
-            Orientation::horizontally, (1, 3), 
-            Orientation::horizontally);
+            Orientation::Horizontally, (1, 3), 
+            Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given, horizontally, no collision
         let tuple_keywords = test_mocks((1, 1), 
-                Orientation::horizontally, (7, 1), 
-                Orientation::horizontally);
+                Orientation::Horizontally, (7, 1), 
+                Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given, perpendicularly, no collision
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::perpendicularly, (2, 1), 
-        Orientation::perpendicularly);
+        Orientation::Perpendicularly, (2, 1), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given, perpendicularly, no collision
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::perpendicularly, (1, 7), 
-        Orientation::perpendicularly);
+        Orientation::Perpendicularly, (1, 7), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::horizontally, (3, 3), 
-        Orientation::perpendicularly);
+        Orientation::Horizontally, (3, 3), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::perpendicularly, (3, 1), 
-        Orientation::horizontally);
+        Orientation::Perpendicularly, (3, 1), 
+        Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::horizontally, (2, 1), 
-        Orientation::perpendicularly);
+        Orientation::Horizontally, (2, 1), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((5, 5), 
-        Orientation::horizontally, (1, 1), 
-        Orientation::perpendicularly);
+        Orientation::Horizontally, (1, 1), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(!result);
 
     }
@@ -290,50 +704,50 @@ mod Test_of_crossword {
     fn test_check_collision_collision() {
         //Given, horizontally, collision
         let tuple_keywords = test_mocks((1, 2), 
-        Orientation::horizontally, (1, 2), 
-        Orientation::horizontally);
+        Orientation::Horizontally, (1, 2), 
+        Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
         //Given, horizontally, collision
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::horizontally, (6, 1), 
-        Orientation::horizontally);
+        Orientation::Horizontally, (6, 1), 
+        Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
         //Given, perpendicularly, collision
         let tuple_keywords = test_mocks((1, 2), 
-        Orientation::perpendicularly, (1, 2), 
-        Orientation::perpendicularly);
+        Orientation::Perpendicularly, (1, 2), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
         //Given, perpendicularly, collision
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::perpendicularly, (1, 6), 
-        Orientation::perpendicularly);
+        Orientation::Perpendicularly, (1, 6), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::horizontally, (1, 1), 
-        Orientation::perpendicularly);
+        Orientation::Horizontally, (1, 1), 
+        Orientation::Perpendicularly);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
         //Given perdicuraly and horizontally
         let tuple_keywords = test_mocks((1, 1), 
-        Orientation::perpendicularly, (1, 1), 
-        Orientation::horizontally);
+        Orientation::Perpendicularly, (1, 1), 
+        Orientation::Horizontally);
         //When 
-        let result = Crossword::check_collision(tuple_keywords.1, tuple_keywords.0);
+        let result = Crossword::check_collision(&tuple_keywords.1, &tuple_keywords.0);
         assert!(result);
 
     }
@@ -343,8 +757,8 @@ mod Test_of_crossword {
         //Given 
         //The same char 
         let tuple_keywords = test_mocks((1, 2), 
-            Orientation::horizontally, (1,2), 
-            Orientation::horizontally);
+            Orientation::Horizontally, (1,2), 
+            Orientation::Horizontally);
         //When
         let result = super::Crossword::check_char_is_the_same(&tuple_keywords.0, 
             &tuple_keywords.1, 1, 2);

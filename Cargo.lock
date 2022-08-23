@@ -276,6 +276,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "crossterm",
+ "enable-ansi-support",
  "rand",
  "rusty_audio",
  "rusty_time",
@@ -315,6 +316,15 @@ dependencies = [
  "darling_core",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "enable-ansi-support"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28d29d3ca9ba14c336417f8d7bc7f373e8c16d10c30cc0794b09d3cecab631ab"
+dependencies = [
+ "winapi",
 ]
 
 [[package]]

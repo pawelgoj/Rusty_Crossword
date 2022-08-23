@@ -44,7 +44,7 @@ impl Questions {
         while let State::Row = statement.next().unwrap() {
             let id = statement.read::<i64>(0).unwrap();
             let question = statement.read::<String>(1).unwrap();
-            let answer = statement.read::<String>(2).unwrap();
+            let answer = statement.read::<String>(2).unwrap().to_uppercase();
 
             let question = Question{
                 id: id as u64,
@@ -78,6 +78,7 @@ impl Questions {
             }
         }
     }
+    
     pub fn return_questions(&self, number_of_questions: u8) -> Vec<Question> {
         let mut questions = self.questions.clone();
         questions.sort_by(|a, b| a.id.cmp(&b.id));
@@ -165,8 +166,8 @@ mod test_of_questions {
         questions.load_questions_from_db(path_to_db);
         questions.draw_questions_order();
         //Then
-        let vec_questions = questions.return_questions(6);
-        assert_eq!(vec_questions.len(), 6);
+        let vec_questions = questions.return_questions(7);
+        assert_eq!(vec_questions.len(), 7);
         println!("{:?}", vec_questions)
     }
 }
