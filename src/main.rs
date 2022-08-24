@@ -105,6 +105,7 @@ fn component_user_write_answer(crossword: &mut Crossword,instructions: &Instruct
                         if input_is_correct {
                             crossword.add_guessed_keyword(i as u8);
                             crossword.response_to_user(response_to_user.correct_answer.clone());
+                            audio.play("correct");
                         } else {
                             crossword.clear_user_input(i);
                             crossword.response_to_user(response_to_user.in_correct_answer.clone());                          
@@ -133,10 +134,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     //audio of game 
     let mut audio = Audio::new();
-    audio.add("start", "sounds/correct.mp3");
+    audio.add("start", "sounds/start.mp3");
     audio.add("lose", "sounds/lose.mp3");
-    audio.add("win", "sounds/strat.mp3");
-    audio.add("correct", "sounds/win.mp3");
+    audio.add("win", "sounds/win.mp3");
+    audio.add("correct", "sounds/correct.mp3");
 
     match enable_ansi_support::enable_ansi_support() {
         Ok(()) => {
