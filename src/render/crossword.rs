@@ -27,6 +27,7 @@ pub struct CrosswordKeyword {
 #[derive(Debug)]
 pub struct Crossword {
     pub crossword_keywords: Vec<CrosswordKeyword>,
+    guessed_clues : HashSet<u8>,
     response_to_user: Option<String>,
     instructions_to_user: Option<((String, u8), (String, u8))>
 }
@@ -322,8 +323,10 @@ impl Crossword {
             first = false;
         }
         let questions_taken = Crossword::arrange_indexes_in_order(questions_taken);
+        let mut guessed_clues = HashSet::new();
 
-        Self { crossword_keywords: questions_taken, response_to_user: None, instructions_to_user: None }
+        Self { crossword_keywords: questions_taken, response_to_user: None, instructions_to_user: None, 
+            guessed_clues: guessed_clues}
     }
 
     pub fn response_to_user(&mut self, message: String) {
@@ -389,10 +392,24 @@ impl Crossword {
         return false;
     }
 
-    pub fn show_guessed_keyword() {
-        //TODO
+    pub fn check_keyword_was_guessed(&self, id: u8) -> bool {
+        let contains = self.guessed_clues.contains(&id);
+        contains
     }
 
+    pub fn add_guessed_keyword(&mut self, id: u8) {
+        self.guessed_clues.insert(id);
+    }
+
+    pub fn user_guessed_all_clues(&self) -> bool {
+        let clues = self.crossword_keywords.clone();
+        for clue in clues {
+            if !self.guessed_clues.contains(&(clue.question.id as u8)) {
+                return false;
+            }
+        }
+        return true;
+    }
 }
 
 impl Crossword {
@@ -520,10 +537,6 @@ impl Crossword {
     }
 
 }
-
-
-
-
 
 
 
@@ -700,23 +713,6 @@ mod test_of_crossword {
         assert!(result);
     }
     
-    #[test] 
-    fn test_determine_position_first_position() {
-        //Given 
-        let tuple_keywords = test_mocks((4, 5), 
-            Orientation::Horizontally, (4,5), 
-            Orientation::Horizontally);
-        let positions_taken:Vec<CrosswordKeyword> = Vec::new();
-
-        //When 
-        let position = Crossword::determine_position(tuple_keywords.1, 
-            true, &positions_taken);
-        let result = position.unwrap();
-        //Then 
-        assert_eq!(result.coord_start_x, 5);
-        assert_eq!(result.coord_start_y, 5);
-    }
-
     #[test]
     fn test_check_collision_no_collision() {
         //Given, horizontally, no collision

@@ -7,7 +7,7 @@ use crossterm::cursor::Show;
 use crossterm::terminal::{LeaveAlternateScreen, Clear, ClearType};
 use crossterm::{terminal::{self, EnterAlternateScreen}, ExecutableCommand, cursor::Hide};
 use crossword::respose_to_user_and_instructions::{Instructions, ResponseToUser};
-use crossword::{COLUMS, ROWS, WINDOW_SIZE_X, WINDOW_SIZE_Y};
+use crossword::{WINDOW_SIZE_X, WINDOW_SIZE_Y};
 use crossword::render::crossword::Crossword;
 use crossword::render::frame::{Draw, Frame, new_frame};
 use crossword::render::render::render;
@@ -104,7 +104,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     questions.draw_questions_order();
     let mut crossword = Crossword::new(questions.return_questions(9));
 
-    while crossword.crossword_keywords.len() < 4 {
+    while crossword.crossword_keywords.len() > 4 {
         questions.draw_questions_order();
         crossword = Crossword::new(questions.return_questions(9));
     }
@@ -122,6 +122,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let instructions = Instructions::new();
     let response_to_user = ResponseToUser::new();
 
+
+    //main game actions loop
     let mut user_action = false;
     'loopgame: loop {
         crossword.set_instructions_to_user((instructions.chose_clue.clone(), 
@@ -140,9 +142,21 @@ fn main() -> Result<(), Box<dyn Error>> {
                         break 'loopgame
                     },
                     _ => { //Other key press 
+                        crossword.response_to_user(response_to_user.clear.clone());
+                        crossword.draw(&mut frame_new, start_strings);
+                        let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+                        let _ = render_tx.send(message);
 
                         'keyword: for i in 1..=crossword.crossword_keywords.len() {
                             if key_event.code == KeyCode::Char(i.to_string().chars().nth(0).unwrap()) {
+
+                                if crossword.check_keyword_was_guessed(i as u8) {
+                                    crossword.response_to_user(response_to_user.clue_was_guessed.clone());
+                                    crossword.draw(&mut frame_new, start_strings);
+                                    let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+                                    let _ = render_tx.send(message);
+                                    break 'keyword
+                                }
 
                                 crossword.set_instructions_to_user((instructions.check_answer.clone(),
                                     instructions.end_game.clone()));
@@ -170,6 +184,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                                 KeyCode::Enter => {
                                                     let input_is_correct =crossword.check_user_input_is_correct(i);
                                                     if input_is_correct {
+                                                        crossword.add_guessed_keyword(i as u8);
                                                         crossword.response_to_user(response_to_user.correct_answer.clone());
                                                     } else {
                                                         crossword.clear_user_input(i);
@@ -178,7 +193,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                                     crossword.draw(&mut frame_new, start_strings);
                                                     let message = Message{stop_working: false, frame: Some(frame_new.clone())};
                                                     let _ = render_tx.send(message);
-                                                    //check is answer is correct
+
                                                     break 'user_write_answer
                                                 },
                                                 KeyCode::Esc => {
@@ -214,15 +229,29 @@ fn main() -> Result<(), Box<dyn Error>> {
             },
             _ => {}
         }
+
+        if crossword.user_guessed_all_clues() {
+            crossword.response_to_user(response_to_user.all_correct.clone());
+            crossword.draw(&mut frame_new, start_strings);
+            let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+            let _ = render_tx.send(message);
+
+            thread::sleep(Duration::from_millis(2000));
+            break 'loopgame
+        }
     }
 
+
+
     //Cleanup
+    let message = Message{stop_working: true, frame: None};
+    let _ = render_tx.send(message);
     audio.wait();
     drop(render_tx);
     render_handle.join().unwrap();
-    stdout.execute(Show)?; //pokazuje kursor 
-    stdout.execute(LeaveAlternateScreen)?; //wychodzi z Alternate Screen
-    terminal::disable_raw_mode()?; //wyłacza raw mode 
+    stdout.execute(Show)?; 
+    stdout.execute(LeaveAlternateScreen)?; 
+    terminal::disable_raw_mode()?; 
 
     Ok(())
 

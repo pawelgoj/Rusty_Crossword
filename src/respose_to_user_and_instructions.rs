@@ -6,7 +6,11 @@ pub struct Instructions {
  pub struct ResponseToUser {
     pub to_long_answer: String,
     pub correct_answer: String,
-    pub in_correct_answer: String
+    pub in_correct_answer: String,
+    pub clue_was_guessed: String,
+    pub all_correct: String,
+    pub clear: String
+
 }
 
 impl Instructions {
@@ -22,9 +26,12 @@ impl Instructions {
 impl ResponseToUser {
     pub fn new() -> Self {
     Self {
-            to_long_answer: "\x1b[1;93mKeyword was to long!!!!!!! Write again.\x1b[1;37m".to_string(),
-            correct_answer: "\x1b[1;92mCorrect answer!!!!!!!\x1b[1;37m                       ".to_string(),
-            in_correct_answer: "\x1b[1;91mIncorrect answer!!!!!!! Write again.\x1b[1;37m     ".to_string()
+            to_long_answer: "\x1b[1;93mKeyword was to long!!!!!!! Write again.\x1b[1;37m               ".to_string(),
+            correct_answer: "\x1b[1;92mCorrect answer!!!!!!!\x1b[1;37m                                  ".to_string(),
+            all_correct: "\x1b[1;92mYou Win!!!!!!!\x1b[1;37m                                               ".to_string(),
+            in_correct_answer: "\x1b[1;91mIncorrect answer!!!!!!! Write again.\x1b[1;37m                ".to_string(),
+            clue_was_guessed: "\x1b[1;93mThis clue was guessed, chose another clue.\x1b[1;37m          ".to_string(),
+            clear: "                                                                                       ".to_string()
         }
     }
 }
