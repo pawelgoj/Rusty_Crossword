@@ -61,10 +61,9 @@ impl Crossword {
         let crossword_string_2 = question_in_crossword.question.answer.clone();
 
         let mut i_in_crossword = 0;
-        let mut index = None;
 
         for ch in crossword_string_2.chars() {
-            index = crossword_string.find(ch);
+            let index = crossword_string.find(ch);
 
             match index {
                 Some(index) => { 
@@ -323,7 +322,7 @@ impl Crossword {
             first = false;
         }
         let questions_taken = Crossword::arrange_indexes_in_order(questions_taken);
-        let mut guessed_clues = HashSet::new();
+        let guessed_clues = HashSet::new();
 
         Self { crossword_keywords: questions_taken, response_to_user: None, instructions_to_user: None, 
             guessed_clues: guessed_clues}
@@ -411,6 +410,7 @@ impl Crossword {
         return true;
     }
 }
+
 
 impl Crossword {
 
@@ -644,7 +644,7 @@ mod test_of_crossword {
         let result = result.unwrap();
 
         //Then
-        let mut result_orientation = false;
+        let result_orientation;
 
         match result.orientation {
             Orientation::Perpendicularly => {result_orientation = true},
@@ -667,7 +667,7 @@ mod test_of_crossword {
         let result = result.unwrap();
 
         //Then
-        let mut result_orientation = false;
+        let result_orientation;
 
         match result.orientation {
             Orientation::Horizontally => {result_orientation = true},

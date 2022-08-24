@@ -1,5 +1,3 @@
-use std::sync::BarrierWaitResult;
-
 use sqlite::State;
 use rand::Rng;
 
@@ -37,7 +35,7 @@ impl Questions {
     pub fn load_questions_from_db(&mut self, path: &str) {
 
         let conn = sqlite::open(path).unwrap();
-        let mut statement = conn.prepare("SELECT * FROM Passwords",).unwrap();
+        let mut statement = conn.prepare("SELECT * FROM Questions",).unwrap();
 
         self.questions.clear();
 

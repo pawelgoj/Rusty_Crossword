@@ -23,7 +23,7 @@ impl Welcome {
 impl Draw for Welcome {
     fn draw(&self, frame: &mut Frame) {
         let position = ((COLUMS - self.inscription.len() as u8) / 2) as u8;
-        let mut first = true;
+        let first = true;
         let mut i: usize = 0;
         for pixel in &self.positions_of_pixels {
             i += 1;

@@ -13,7 +13,7 @@ pub fn render(stdout: &mut Stdout, last_frame: &Frame, curr_frame: &Frame, chang
         stdout.queue(SetBackgroundColor(Color::Black)).unwrap(); 
 
     }
-    stdout.execute(Hide);
+    let _ = stdout.execute(Hide);
     //this render what is in the frame.
     for (x, col) in curr_frame.iter().enumerate() {
         for (y, s) in col.iter().enumerate() {
