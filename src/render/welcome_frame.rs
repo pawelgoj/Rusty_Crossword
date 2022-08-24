@@ -29,10 +29,10 @@ impl Draw for Welcome {
             i += 1;
             let p = pixel.0 + 5;
             let mut out = String::new();
-            let char = '*'.to_string();
+            let char = '█'.to_string();
 
             if first {
-                out.push_str("\x1b[1;31m");
+                out.push_str("\x1b[1;91m");
                 out.push_str(&char);
             }
             frame[ p as usize][pixel.1 as usize] = out;

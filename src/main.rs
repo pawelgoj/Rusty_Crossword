@@ -1,14 +1,13 @@
-use std::io::stdin;
 use std::sync::mpsc::{self, Sender, Receiver};
 use std::thread;
 use std::{io, time::Duration};
 use std::error::Error;
 
-use crossterm::QueueableCommand;
 use crossterm::cursor::Show;
 use crossterm::terminal::{LeaveAlternateScreen, Clear, ClearType};
 use crossterm::{terminal::{self, EnterAlternateScreen}, ExecutableCommand, cursor::Hide};
-use crossword::{COLUMS, ROWS};
+use crossword::respose_to_user_and_instructions::{Instructions, ResponseToUser};
+use crossword::{COLUMS, ROWS, WINDOW_SIZE_X, WINDOW_SIZE_Y};
 use crossword::render::crossword::Crossword;
 use crossword::render::frame::{Draw, Frame, new_frame};
 use crossword::render::render::render;
@@ -47,6 +46,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     audio.add("win", "sounds/strat.mp3");
     audio.add("correct", "sounds/win.mp3");
 
+    match enable_ansi_support::enable_ansi_support() {
+        Ok(()) => {
+            audio.play("correct")}
+        Err(_) => {println!("Non supported!!")}
+        }
+
     audio.play("start");
 
     //terminal 
@@ -55,7 +60,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     stdout.execute(EnterAlternateScreen)?; //Alternate Screen, screen like vim,
     stdout.execute(Hide)?; //Hide cursor.
     let _result = stdout.execute(
-        terminal::SetSize(COLUMS as u16 + 20, ROWS as u16 + 20));
+        terminal::SetSize(WINDOW_SIZE_X as u16, WINDOW_SIZE_Y as u16));
 
     //Render loop 
     let(render_tx, render_rx): (Sender<Message>, Receiver<Message>) = mpsc::channel();
@@ -97,14 +102,14 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut questions = Questions::new();
     questions.load_questions_from_db("Password.db");
     questions.draw_questions_order();
-    let mut crossword = Crossword::new(questions.return_questions(7));
+    let mut crossword = Crossword::new(questions.return_questions(9));
 
-    while crossword.crossword_keywords.len() < 5 {
+    while crossword.crossword_keywords.len() < 4 {
         questions.draw_questions_order();
-        crossword = Crossword::new(questions.return_questions(7));
+        crossword = Crossword::new(questions.return_questions(9));
     }
 
-    thread::sleep(Duration::from_millis(750));
+    thread::sleep(Duration::from_millis(1000));
 
     let start_strings: u8 = 22;
     let mut frame_new = new_frame(Some(start_strings));
@@ -114,70 +119,81 @@ fn main() -> Result<(), Box<dyn Error>> {
     let message = Message{stop_working: false, frame: Some(frame_new.clone())};
     let _ = render_tx.send(message);
 
+    let instructions = Instructions::new();
+    let response_to_user = ResponseToUser::new();
+
     let mut user_action = false;
     'loopgame: loop {
+        crossword.set_instructions_to_user((instructions.chose_clue.clone(), 
+            instructions.end_game.clone()));
+        crossword.draw(&mut frame_new, start_strings);
+        let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+        let _ = render_tx.send(message);
+
         //block weiting to event 
         let event = event::read()?;
         match event {
             Event::Key(ref key_event) => {
                 match key_event.code {
-                    KeyCode::Char('q') => {
+                    KeyCode::Esc => { 
                         break_game_loop(&mut audio, &render_tx);
                         break 'loopgame
                     },
                     _ => { //Other key press 
-                        let mut find = false;
 
                         'keyword: for i in 1..=crossword.crossword_keywords.len() {
                             if key_event.code == KeyCode::Char(i.to_string().chars().nth(0).unwrap()) {
-                                //TODO 
-                                //input 
+
+                                crossword.set_instructions_to_user((instructions.check_answer.clone(),
+                                    instructions.end_game.clone()));
+                                crossword.draw(&mut frame_new, start_strings);
+                                let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+                                let _ = render_tx.send(message);
+
                                 'user_write_answer: loop {
                                     let v = event::read()?;
                                     match v {
                                         Event::Key(key) => {
                                             match key.code {
                                                 KeyCode::Char(ch) => {
-                                                    if ch == '0' {
-                                                        break_game_loop(&mut audio, &render_tx);
-                                                        break 'loopgame
-                                                    } else {
-                                                        crossword.add_user_input(ch, i);
-                                                        crossword.draw(&mut frame_new, start_strings);
-                                                        let message = Message{stop_working: false, frame: Some(frame_new.clone())};
-                                                        let _ = render_tx.send(message);
+                                                    let to_long_user_input = crossword.add_user_input(ch, i);
+                                                    if to_long_user_input {
+                                                        crossword.clear_user_input(i);
+                                                        crossword.response_to_user(response_to_user.to_long_answer.clone());
+                                                        crossword.set_instructions_to_user((instructions.check_answer.clone(),
+                                                            instructions.end_game.clone()));
                                                     }
+                                                    crossword.draw(&mut frame_new, start_strings);
+                                                    let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+                                                    let _ = render_tx.send(message);
                                                 },
                                                 KeyCode::Enter => {
-                                                    //TODO
+                                                    let input_is_correct =crossword.check_user_input_is_correct(i);
+                                                    if input_is_correct {
+                                                        crossword.response_to_user(response_to_user.correct_answer.clone());
+                                                    } else {
+                                                        crossword.clear_user_input(i);
+                                                        crossword.response_to_user(response_to_user.in_correct_answer.clone());                          
+                                                    }
+                                                    crossword.draw(&mut frame_new, start_strings);
+                                                    let message = Message{stop_working: false, frame: Some(frame_new.clone())};
+                                                    let _ = render_tx.send(message);
                                                     //check is answer is correct
                                                     break 'user_write_answer
-                                                }
+                                                },
+                                                KeyCode::Esc => {
+                                                    break_game_loop(&mut audio, &render_tx);
+                                                    break 'loopgame
+                                                },
                                                 _ => {}
                                             }
                                         },
                                         _ => {}
                                     }
                                 }
-                                match enable_ansi_support::enable_ansi_support() {
-                                    Ok(()) => {
-                                        audio.play("correct")}
-                                    Err(_) => {println!("Non supported!!")}
-                                    }
-
-                                find = true;
                                 break 'keyword;
                                 
                             } else { continue }
-                            
-                        }
-                        if !find {
-                            crossword.response_to_user(
-                                "press the crossword password number, e.g. 1".to_string());
-                            let mut frame_new = new_frame(Some(start_strings));
-                            crossword.draw(&mut frame_new, start_strings);
-                            let message = Message{stop_working: false, frame: Some(frame_new.clone())};
-                            let _ = render_tx.send(message);
                         }
                     }
                 }
@@ -186,7 +202,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 if user_action {
                     user_action = false;
                     let _result = stdout.execute(
-                        terminal::SetSize(COLUMS as u16 + 20, ROWS as u16 + 20));
+                        terminal::SetSize(WINDOW_SIZE_X as u16, WINDOW_SIZE_Y as u16));
                     stdout.execute(Clear(ClearType::All)).unwrap();
                     stdout.execute(Hide).unwrap();
 
