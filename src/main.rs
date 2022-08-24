@@ -21,8 +21,7 @@ use rusty_audio::Audio;
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Cli{
-    #[clap(short, long, action)]
-    new_game: bool,
+
 }
 
 pub struct Message {
