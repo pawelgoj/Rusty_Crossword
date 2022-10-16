@@ -1,41 +1,34 @@
-use sqlite::State;
 use rand::Rng;
+use sqlite::State;
 
-#[derive(Debug, Eq, Ord, PartialEq, PartialOrd)]
-#[derive(Clone)]
+#[derive(Debug, Eq, Ord, PartialEq, PartialOrd, Clone)]
 pub struct Question {
     pub id: u64,
     pub question: String,
     pub answer: String,
 }
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Questions {
     pub questions: Vec<Question>,
     pub len: u8,
 }
 
-
-
-
 impl Questions {
-
     pub fn new() -> Self {
         let question = Question {
             id: 0,
             question: String::new(),
             answer: String::new(),
         };
-        Self { 
+        Self {
             questions: vec![question],
             len: 0,
         }
     }
 
     pub fn load_questions_from_db(&mut self, path: &str) {
-
         let conn = sqlite::open(path).unwrap();
-        let mut statement = conn.prepare("SELECT * FROM Questions",).unwrap();
+        let mut statement = conn.prepare("SELECT * FROM Questions").unwrap();
 
         self.questions.clear();
 
@@ -44,7 +37,7 @@ impl Questions {
             let question = statement.read::<String>(1).unwrap();
             let answer = statement.read::<String>(2).unwrap().to_uppercase();
 
-            let question = Question{
+            let question = Question {
                 id: id as u64,
                 question: question,
                 answer: answer,
@@ -59,7 +52,6 @@ impl Questions {
         let mut list_of_used_ids = Vec::new();
         let len = self.len;
         for guestion in &mut self.questions {
-
             'question: loop {
                 let ids = rng.gen_range(1..=len);
 
@@ -67,36 +59,35 @@ impl Questions {
                     guestion.id = ids as u64;
                     list_of_used_ids.push([ids]);
                     break 'question;
-
                 } else if list_of_used_ids.len() < len as usize {
-                    continue
+                    continue;
                 } else {
                     panic!("Range of loop is incorrect!!!")
                 }
             }
         }
     }
-    
+
     pub fn return_questions(&self, number_of_questions: u8) -> Vec<Question> {
         let mut questions = self.questions.clone();
         questions.sort_by(|a, b| a.id.cmp(&b.id));
         let questions = questions[0..number_of_questions as usize].to_vec();
         questions
     }
-    
-
 }
 
 #[cfg(test)]
 mod test_of_questions {
 
-    struct PreConditions { 
+    struct PreConditions {
         path: String,
     }
 
     impl PreConditions {
         pub fn new() -> Self {
-            Self {path: String::from("Password.db")}
+            Self {
+                path: String::from("Password.db"),
+            }
         }
     }
 
@@ -105,30 +96,29 @@ mod test_of_questions {
         //Given
         let pre_conditions = PreConditions::new();
         let path_to_db = pre_conditions.path.as_str();
-        let actual_len = 0; 
-        //When empty 
+        let actual_len = 0;
+        //When empty
         let mut questions = super::Questions::new();
-        //Then 
+        //Then
         assert_eq!(questions.len, actual_len);
-        //When loaded data from data base 
+        //When loaded data from data base
         let actual_len = 8;
         questions.load_questions_from_db(path_to_db);
-        //Then 
+        //Then
         assert_eq!(questions.len, actual_len);
-
     }
 
     #[test]
     fn draw_question_order() {
-        //Given 
+        //Given
         let pre_conditions = PreConditions::new();
         let path_to_db = pre_conditions.path.as_str();
         let mut question = super::Questions::new();
-        //When 
+        //When
         question.load_questions_from_db(path_to_db);
         let previous_questions = question.clone();
         question.draw_questions_order();
-        //Then 
+        //Then
 
         let mut questions_vec = Vec::new();
         for item in question.questions {
@@ -138,10 +128,10 @@ mod test_of_questions {
         for item in previous_questions.questions {
             questions_vec_pre.push(item.id);
         }
-        
+
         //check allowed id >0
         let mut correct = true;
-        
+
         for item in &questions_vec {
             if *item < 1 {
                 correct = false;
@@ -159,7 +149,7 @@ mod test_of_questions {
         let pre_conditions = PreConditions::new();
         let path_to_db = pre_conditions.path.as_str();
         let mut questions = super::Questions::new();
-        //When 
+        //When
         questions.load_questions_from_db(path_to_db);
         questions.load_questions_from_db(path_to_db);
         questions.draw_questions_order();
@@ -169,7 +159,3 @@ mod test_of_questions {
         println!("{:?}", vec_questions)
     }
 }
-
-
-
-
