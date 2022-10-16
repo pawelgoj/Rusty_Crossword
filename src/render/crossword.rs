@@ -283,29 +283,27 @@ impl Crossword {
             panic!("The keyword to long to crrosword in x direction")
         } else if question_len > (rows as usize) - 2 {
             panic!("The keyword to long to crrosword in y direction")
+        } else if first {
+            let mut rng = rand::thread_rng();
+            let pos = rng.gen_range(5..=10);
+            question.coord_start_x = pos as u8;
+            question.coord_start_y = pos as u8;
+            return Some(question);
         } else {
-            if first {
-                let mut rng = rand::thread_rng();
-                let pos = rng.gen_range(5..=10);
-                question.coord_start_x = pos as u8;
-                question.coord_start_y = pos as u8;
-                return Some(question);
-            } else {
-                for question_in_crossword in questions_taken {
-                    let question_tym = Crossword::find_position_of_keyword_by_intersect(
-                        question.clone(),
-                        &question_in_crossword,
-                        &questions_taken,
-                    );
-                    match question_tym {
-                        None => {}
-                        Some(question_tym) => {
-                            return Some(question_tym);
-                        }
+            for question_in_crossword in questions_taken {
+                let question_tym = Crossword::find_position_of_keyword_by_intersect(
+                    question.clone(),
+                    &question_in_crossword,
+                    &questions_taken,
+                );
+                match question_tym {
+                    None => {}
+                    Some(question_tym) => {
+                        return Some(question_tym);
                     }
                 }
-                return None;
             }
+            return None;
         }
     }
 
@@ -563,15 +561,13 @@ impl Crossword {
                 && !positions_with_leters.contains(&((col) as u8, row as u8))
             {
                 frame[(col) as usize][(row) as usize] = char.to_string();
-            } else {
-                if !positions_with_leters.contains(&((col) as u8, row as u8)) {
-                    if i < user_input.len() as u8 {
-                        frame[(col) as usize][(row) as usize] =
-                            user_input.chars().nth(i.into()).unwrap().to_string();
-                        positions_with_leters.insert(((col) as u8, row as u8));
-                    } else {
-                        frame[(col) as usize][(row) as usize] = char.to_string();
-                    }
+            } else if !positions_with_leters.contains(&((col) as u8, row as u8)) {
+                if i < user_input.len() as u8 {
+                    frame[(col) as usize][(row) as usize] =
+                        user_input.chars().nth(i.into()).unwrap().to_string();
+                    positions_with_leters.insert(((col) as u8, row as u8));
+                } else {
+                    frame[(col) as usize][(row) as usize] = char.to_string();
                 }
             }
         }
